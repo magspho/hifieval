@@ -5,6 +5,9 @@
 how to download
 
 ## Users' Guide
+
+	python hifieval.py -g <ref.fa>|<ref.fq> -r <raw.paf> -c <corr.paf>
+
 a tool to evaluate long-read error correction mainly with PacBio High-Fidelity Reads (HiFi reads). 
 
 The genome dataset is CHM13v1.1 [https://github.com/marbl/CHM13]. The fastq.gz files contain 30x PacBio HiFi reads. A smaller dataset from E. coli is also used for testing and read simulation.

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hifieval"
+version = "0.3.0"
+authors = [
+  { name="Yujie Guo", email="yujie_guo@hms.harvard.edu" },
+]
+description = "A tool to evaluate long-read error correction mainly with PacBio High-Fidelity Reads"
+readme = "README.md"
+requires-python = ">=3.5"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/magspho/hifieval"
+"Bug Tracker" = "https://github.com/magspho/hifieval/issues"

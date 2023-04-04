@@ -1,5 +1,3 @@
-# hifieval
-
 ## Getting started
 
 how to download

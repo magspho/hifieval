@@ -32,7 +32,7 @@ The paf file will encodes difference of sequence alignments in the short form, i
 - UC: (under-correction) The errors in raw reads that are still in corrected reads
 - CC: (correct-correction) The errors that are in raw reads but not corrected reads
 
-## General usage
+### General usage
 - Examples of Error Correction (EC) tools to output error corrected reads
     - hifiasm: ```hifiasm -o <prefix> --write-ec -t32 <read_files> 2> <prefix>.log```
     - LJA:     ```lja -o <output_dir> --reads <reads_file> [--reads <reads_file2> …]```

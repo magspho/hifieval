@@ -1,22 +1,25 @@
 #!/usr/bin/env python
 
 # Global var that stores the most detailed information of hifieval
-summary = "\t".join(["readName", "raw_mapped_chr", "raw_start", "raw_end", "corrected_mapped_chr", "corrected_start", "corrected_end", "num_oc", "num_uc", "num_cc\n"])
+from io import StringIO
+summary = StringIO()
+summary.write("\t".join(["readName", "raw_mapped_chr", "raw_start", "raw_end", "raw_mq", "corrected_mapped_chr", "corrected_start", "corrected_end", "corrected_mq", "num_oc", "num_uc", "num_cc\n"]))
 
 def add_summary(*args):
     global summary
-    summary += "\t".join(args)
-    summary += "\n"
+    summary.write("\t".join(args))
+    summary.write("\n")
 
 # ------1. Class Objects for Error Correction Evaluation------ 
 class ReadError(object):
     """This internal class object ReadError parses .paf files."""
-    def __init__(self, readName, strand, chrName, start, end):
+    def __init__(self, readName, strand, chrName, start, end, mq):
         self.readName = readName
         self.strand   = strand
         self.chrName  = chrName
         self.start    = int(start)
         self.end      = int(end)
+        self.mq       = int(mq)
         self.inPos    = []
         self.delPos   = []
         self.misPos   = []
@@ -40,9 +43,10 @@ class ReadError(object):
                 num += int(identical)
                 tmp = re.sub(r'.', '', tmp, count = 1+len(identical))
             # mismatch
-            elif tmp[0] == '*':
+            elif tmp[0] == '*': 
                 num += 1
-                self.misPos.append(num+self.start)
+                self.misPos.append(num)
+#                 self.misPos.append(num+self.start)
                 tmp = re.sub(r'.', '', tmp, count = 3)
             # insertion
             elif tmp[0] == "+":
@@ -51,8 +55,9 @@ class ReadError(object):
                     if ch.isalpha():
                         insertion += ch
                     else: break
-                num += 1
-                self.inPos.append(num+self.start)
+                # the position doesn't need to be added since this is an insertion
+                self.inPos.append(num+1)
+#                 self.inPos.append(num+self.start)
                 tmp = re.sub(r'.', '', tmp, count = 1+len(insertion))
             # deletion
             elif tmp[0] == "-":
@@ -61,55 +66,10 @@ class ReadError(object):
                     if ch.isalpha():
                         deletion += ch
                     else: break
-                num += 1
-                self.delPos.append(num+self.start)
-                tmp = re.sub(r'.', '', tmp, count = 1+len(deletion))
-            else:
-                eprint("Unexpected error tag {} in read {}'s cs: {}".format(tmp[0], self.readName, read_cs))
-                break
-        return self
-    
-    def get_reverse_error(self,read_cs):
-        read_len = int(self.end)-int(self.start)+1
-        tmp = read_cs
-        if tmp.startswith('cs:Z:'):
-            tmp = tmp[5:]
-        else:
-            eprint("Error in read {}'s cs: {}".format(self.readName, tmp))
-            return self
-        num = 0
-        while len(tmp) != 0:
-            # identical
-            if tmp[0] == ':':
-                identical = re.search(r'\d+', tmp).group()
-                num += int(identical)
-                tmp = re.sub(r'.', '', tmp, count = 1+len(identical))
-            # mismatch
-            elif tmp[0] == '*':
-                num += 1
-                self.misPos.append(read_len-num+1+self.start)
-                tmp = re.sub(r'.', '', tmp, count = 3)
-            # insertion
-            elif tmp[0] == "+":
-                insertion = ''
-                for ch in tmp[1:]:
-                    if ch.isalpha():
-                        insertion += ch
-                    else: 
-                        break
-                num += 1
-                self.inPos.append(read_len-num+1+self.start)
-                tmp = re.sub(r'.', '', tmp, count = 1+len(insertion))
-            # deletion
-            elif tmp[0] == "-":
-                deletion = ''
-                for ch in tmp[1:]:
-                    if ch.isalpha():
-                        deletion += ch
-                    else: 
-                        break
-                num += 1
-                self.delPos.append(read_len-num+1+self.start)
+                self.delPos.append(num+1)
+                # take account into the length of deletion into calculating current position
+                num += len(deletion)
+#                 self.delPos.append(num+self.start)
                 tmp = re.sub(r'.', '', tmp, count = 1+len(deletion))
             else:
                 eprint("Unexpected error tag {} in read {}'s cs: {}".format(tmp[0], self.readName, read_cs))
@@ -151,66 +111,101 @@ class CorrectionStat(object):
     
     def get_FDR(self):
         # FDR = FP / (TP+FP)
-        return len(self.ocPos)/(len(self.ccPos)+len(self.ocPos))
+        if len(self.ccPos)+len(self.ocPos) != 0:
+            return len(self.ocPos)/(len(self.ccPos)+len(self.ocPos))
+        else:
+            if len(self.ocPos) != 0:
+                return 1
+            else:
+                return 0
     
     def get_FNR(self):
         # FNR = FN / (TP+FN)
-        return len(self.ucPos)/(len(self.ccPos)+len(self.ucPos))
+        if len(self.ccPos)+len(self.ucPos) != 0:
+            return len(self.ucPos)/(len(self.ccPos)+len(self.ucPos))
+        else:
+            if len(self.ucPos) != 0:
+                return 1
+            else:
+                return 0
     
     def get_TPR(self):
         # TPR = TP / (TP+FN)
-        return len(self.ccPos)/(len(self.ccPos)+len(self.ucPos))
+        if len(self.ccPos)+len(self.ucPos) != 0:
+            return len(self.ccPos)/(len(self.ccPos)+len(self.ucPos))
+        else:
+            return 0
 
 
 # ------2. Main functions for whole-genome Evaluation------
 # ------2.1 Analyze the .paf files from minimap2.    ------
 def paf_pairs(paf_file1, paf_file2):
     """
-    Generator v3 for function error_correction_eval()
+    Generator v4 for function error_correction_eval()
+    v3 didn't account for supplementary alignment and was not saved.
     Return a pair of list with selected columns from .paf files generated 
-    by minimap2 mapping raw reads to ref genome and corrected reads
+    by minimap2 mapping raw reads(1) to ref genome and corrected reads(2)
     to ref genome.
     """
-    corr_pafs = readNames = None
+    readNames = dict()
+    corr_pafs = []
     
     with open(paf_file2,'r') as paf2:
+        prev_c = None
         # save the corrected reads paf for fast searching in raw reads pafs
-        corr_pafs = [parse_read_paf(line) for line in paf2.readlines()]
+        for corr_line in paf2.readlines():
+            corr_paf = parse_read_paf(corr_line, prev_c)
+            if corr_paf is not None:
+                corr_pafs.append(corr_paf)
+                prev_c = corr_line
+            else:
+                continue
         readNames = dict((paf[0], i) for i,paf in enumerate(corr_pafs))
         
     with open(paf_file1,'r') as paf1:
         prev_r = None
-        
         for raw_line in paf1.readlines():
             raw_paf = parse_read_paf(raw_line, prev_r)
-            if raw_paf is not None:    
+            if raw_paf is not None:
                 if raw_paf[0] in readNames:
                     # get corresponding corrected reads paf
                     corr_paf = corr_pafs[readNames[raw_paf[0]]]
-                    prev_r = raw_paf
+                    prev_r = raw_line
                 else:
                     eprint('Read {} has been removed by the EC tool.'.format(raw_paf[0]))
-                    prev_r = raw_paf
+                    prev_r = raw_line
                     continue
                 yield raw_paf, corr_paf
 
-def parse_read_paf(line, prev_paf=None):
+def parse_read_paf(line, prev_line=None):
     """
-    A Helper method to parse reads paf files for function error_correction_eval(),
-    If prev_paf is always set to None, then secondary alignment is also considered.
+    A Helper method to parse reads paf files for function error_correction_eval().
+    If prev_line is not specified, then supplementary and secondary alignment is also considered.
     """
-    line = line.rstrip()
-    tmp = line.split('\t')
+    tmp = line.rstrip().split('\t')
     
-    # take the first appearing read in the paf file / primary alignment
-    if prev_paf is not None:
-        if tmp[0] == prev_paf[0] or len(tmp) < 24:
+    # take the primary alignment read in the paf file
+    if prev_line is not None:
+        prev_line = prev_line.rstrip().split('\t')
+        if tmp[0] == prev_line[0]:
+            prev_ms = int(prev_line[13].strip('ms:i:'))
+            curr_ms = int(tmp[13].strip('ms:i:'))
+            if prev_ms < curr_ms:
+                # this shouldn't happen since the prev one should always be primary
+                print("Warning:")
+                print(f"Check Prev line: {prev_line}")
+                print(f"Curr line: {tmp}")
+                return None
+            else:
+                # the previous one is primary alignment
+                return None
+        if len(tmp) < 24:
+            print(f"Bad read alignment: {tmp[0]}")
             return None
     
-    indices = [0,4,5,7,8,10,-1]
+    indices = [0,4,5,7,8,10,-1,11]
     # readName, strand, chrName, start, end, nbase, cs
     readpaf = [tmp[index] for index in indices]
-    
     return readpaf
 
 def error_corr_helper(raw_plist, corr_plist):
@@ -227,7 +222,7 @@ def error_corr_helper(raw_plist, corr_plist):
     
     return list(oc), list(uc), list(cc)
 
-def error_correction_eval(raw_paf_file, corr_paf_file):
+def error_correction_eval(raw_paf_file, corr_paf_file, full_summary = True):
     """
     Assess the results of read correction from error correction tool
     using the pairwise alignment info from raw and corrected reads to reference seq.
@@ -240,17 +235,13 @@ def error_correction_eval(raw_paf_file, corr_paf_file):
     
     for raw_paf, corr_paf in paf_pairs(raw_paf_file, corr_paf_file):
         
-        raw_error = ReadError(*raw_paf[0:5])
-        if raw_error.strand == '+':
-            raw_error = raw_error.get_error(raw_paf[6])
-        else:
-            raw_error = raw_error.get_reverse_error(raw_paf[6])
+        raw_error = ReadError(*raw_paf[0:5],raw_paf[-1])
+        # It doesn't matter whether the strand is forward or reverse
+        raw_error = raw_error.get_error(raw_paf[6])
 
-        corr_error = ReadError(*corr_paf[0:5])
-        if corr_error.strand == '+':
-            corr_error = corr_error.get_error(corr_paf[6])
-        else:
-            corr_error = corr_error.get_reverse_error(corr_paf[6])
+        corr_error = ReadError(*corr_paf[0:5],corr_paf[-1])
+        corr_error = corr_error.get_error(corr_paf[6])
+        
         # check if reads are the same from raw and corrected
         if raw_error.readName != corr_error.readName:
             eprint('***Read name of two paf not matched***')
@@ -258,32 +249,41 @@ def error_correction_eval(raw_paf_file, corr_paf_file):
             eprint(corr_error)
             return None
         oc, uc, cc = error_corr_helper(raw_error.all_error(), corr_error.all_error())
-        
-        add_summary(raw_error.readName, 
-                    raw_error.chrName, str(raw_error.start), str(raw_error.end), 
-                    corr_error.chrName, str(corr_error.start), str(corr_error.end), 
-                    str(len(oc)), str(len(uc)), str(len(cc)))
-        
-        # assuming both raw and corrected reads are mapped to the same chromosome
-        key = corr_error.chrName
-        if key in output:
-            output[key].add_pos(oc, uc, cc)
+        # if we don't need full summary, then only reads with non-zero oc/uc are included.
+        if full_summary:
+            add_summary(raw_error.readName, 
+                        raw_error.chrName, str(raw_error.start), str(raw_error.end), str(raw_error.mq), 
+                        corr_error.chrName, str(corr_error.start), str(corr_error.end), str(corr_error.mq), 
+                        str(len(oc)), str(len(uc)), str(len(cc)))
         else:
-            output[key] = CorrectionStat(corr_error.chrName).add_pos(oc, uc, cc)
+            if len(oc) != 0 or len(uc) != 0:
+                add_summary(raw_error.readName, 
+                        raw_error.chrName, str(raw_error.start), str(raw_error.end), str(raw_error.mq), 
+                        corr_error.chrName, str(corr_error.start), str(corr_error.end), str(corr_error.mq), 
+                        str(len(oc)), str(len(uc)), str(len(cc)))
+        
+        # append to output if both raw and corrected reads are mapped to the same chromosome
+        if raw_error.chrName == corr_error.chrName:
+            key = corr_error.chrName
+            if key in output:
+                output[key].add_pos(oc, uc, cc)
+            else:
+                output[key] = CorrectionStat(corr_error.chrName).add_pos(oc, uc, cc)
 
     return output
 
 # ------2.2 Getting holistic stats for EC evaluation ------
 def get_eval(ercor_output, chrlvl = True):
+    # chrlvl=False for HG002
     """
     Evaluation metrics of one EC Tool.
     Returns a tab-delimited file with four columns: chrName, FDR, FNR, TPR.
     Used for generating bar plot.
     """
     all_chr_eval = defaultdict(float)
-    txt = ''
-    txt += '\t'.join(['chrName','FDR','FNR','TPR'])
-    txt += '\n'
+    txt = StringIO()
+    txt.write('\t'.join(['chrName','FDR','FNR','TPR']))
+    txt.write('\n')
     for key in ercor_output.keys():
         tmp = ercor_output[key].read2chr()
         all_chr_eval['oc'] += len(tmp.ocPos)
@@ -294,15 +294,17 @@ def get_eval(ercor_output, chrlvl = True):
             fdr = tmp.get_FDR()
             fnr = tmp.get_FNR()
             tpr = tmp.get_TPR()
-            txt += '\t'.join([key, str(fdr), str(fnr), str(tpr)])
-            txt += '\n'
-    
+            txt.write('\t'.join([key, str(fdr), str(fnr), str(tpr)]))
+            txt.write('\n')
+   
     fdr = all_chr_eval['oc']/(all_chr_eval['cc']+all_chr_eval['oc'])
     fnr = all_chr_eval['uc']/(all_chr_eval['cc']+all_chr_eval['uc'])
     tpr = all_chr_eval['cc']/(all_chr_eval['cc']+all_chr_eval['uc'])
-    txt += '\t'.join(['all', str(fdr), str(fnr), str(tpr)])
-    txt += '\n'
-    return txt
+    txt.write('\t'.join(['all', str(fdr), str(fnr), str(tpr)]))
+    txt.write('\n')
+    txt_out = txt.getvalue()
+    txt.close()
+    return txt_out
 
 def get_readlvl_eval(ercor_output, chrlvl = True):
     """
@@ -311,7 +313,7 @@ def get_readlvl_eval(ercor_output, chrlvl = True):
     """
     oc_cntall = defaultdict(int)
     uc_cntall = defaultdict(int)
-    txt = ''
+    txt = StringIO()
     for key in ercor_output.keys():
         oc_cnt = defaultdict(int)
         uc_cnt = defaultdict(int)
@@ -325,22 +327,23 @@ def get_readlvl_eval(ercor_output, chrlvl = True):
                 uc_cntall[len(read_uc)] += 1
         
         if chrlvl:
-            txt += key+'_oc\t'+'\t'.join([str(oc_cnt[i]) 
-                                          for i in sorted(oc_cnt.keys())])+'\n'
-            txt += key+'_uc\t'+'\t'.join([str(uc_cnt[i]) 
-                                          for i in sorted(uc_cnt.keys())])+'\n'
+            txt.write(key+"_oc\t"+"\t".join([str(oc_cnt[i]) 
+                                          for i in sorted(oc_cnt.keys())])+"\n")
+            txt.write(key+"_uc\t"+"\t".join([str(uc_cnt[i]) 
+                                          for i in sorted(uc_cnt.keys())])+"\n")
     
-    txt += 'all_oc\t'+'\t'.join([str(oc_cntall[i]) 
-                                 for i in sorted(oc_cntall.keys())])+'\n'
-    txt += 'all_uc\t'+'\t'.join([str(uc_cntall[i]) 
-                                 for i in sorted(uc_cntall.keys())])+'\n'
+    txt.write("all_oc\t"+"\t".join([str(oc_cntall[i]) 
+                                 for i in sorted(oc_cntall.keys())])+"\n")
+    txt.write("all_uc\t"+"\t".join([str(uc_cntall[i]) 
+                                 for i in sorted(uc_cntall.keys())])+"\n")
     
     if len(oc_cntall.keys()) > len(uc_cntall.keys()):
         cnt_nums = list(sorted(oc_cntall.keys()))
     else:
         cnt_nums = list(sorted(uc_cntall.keys()))
-    txt = 'chr\t'+'\t'.join(cnt_nums) + '\n' + txt
-    return txt
+    txt_out = 'chr\t'+'\t'.join(str(i) for i in cnt_nums) + '\n' + txt.getvalue()
+    txt.close()
+    return txt_out
 
 
 # ------3. Get EC performance in homopolymer regions ------
@@ -433,8 +436,6 @@ def hp_error_chr_eval(correction_dict, hp_dict):
             else:
                 hp_err[hp_len] += 1
                 i += 1
-                hp_len_counter[hp_len] += 1
-                j += 1
         if len(hp_len_counter.keys()) == 0:
             continue
         hp_len_range = list(hp_len_counter.keys())
@@ -476,9 +477,7 @@ def hp_error_eval(correction_dict, hp_dict):
         i = j = 0
         
         while i < len(oc) and j < len(hp_pos):
-            
             hp_len = hp_pos[j][1]-hp_pos[j][0]
-            
             if oc[i] > hp_pos[j][1]:
                 hp_len_counter[hp_len] += 1
                 j += 1
@@ -487,25 +486,18 @@ def hp_error_eval(correction_dict, hp_dict):
             else:
                 hp_oc_err[hp_len] += 1
                 i += 1
-                hp_len_counter[hp_len] += 1
-                j += 1
                 
         i = j = 0
         
         while i < len(uc) and j < len(hp_pos):
-            
             hp_len = hp_pos[j][1]-hp_pos[j][0]
-            
             if uc[i] > hp_pos[j][1]:
-#                 hp_len_counter[hp_len] += 1
                 j += 1
             elif uc[i] < hp_pos[j][0]:
                 i += 1
             else:
                 hp_uc_err[hp_len] += 1
                 i += 1
-#                 hp_len_counter[hp_len] += 1
-                j += 1
 
     hp_len_range = list(hp_len_counter.keys())
     max_len = max(hp_len_range)
@@ -516,8 +508,6 @@ def hp_error_eval(correction_dict, hp_dict):
             continue
         hp_oc_err[i] = hp_oc_err[i] / hp_len_counter[i]
         hp_uc_err[i] = hp_uc_err[i] / hp_len_counter[i]
-        
-#         output.append(hp_err)
 
     return hp_oc_err,hp_uc_err,hp_len_counter
 
@@ -533,7 +523,6 @@ def dict2evalbed(correction_dict, prefix):
         for uc in tmp.ucPos:
             lines.append('\t'.join([key, str(uc), str(uc+1)])+'\n')
     uc_bedfile.writelines(lines)
-    # Closing file
     uc_bedfile.close()
     
     oc_bedfile = open(prefix+'.oc.bed', 'w')
@@ -623,7 +612,7 @@ def main(argv):
                                ["prefix=","hp=","specbed","raw=","corrected="])
     
     if len(opts) < 2:
-        print("Usage: hifieval.py  [options]")
+        print("Usage: hifieval.py [options]")
         print("Options:")
         print("  -o STR      Output File Prefix")
         print("  -h STR      FASTA file with reference genome for evaluation in homopolymer region")
@@ -651,15 +640,16 @@ def main(argv):
             eprint(output[i])
         # most detailed summary
         with open(prefix+'.summary.tsv', 'w') as f:
-            f.write(summary)
+            print(summary.getvalue(), file=f)
+            summary.close()
         # generating histogram of readlvl evaluation
         with open(prefix+'.rdlvl.eval.tsv', 'w') as f:
-            f.write(get_readlvl_eval(output))
+            print(get_readlvl_eval(output), file=f)
         # overall metrics
         with open(prefix+'.metric.eval.tsv', 'w') as f:
-            f.write(get_eval(output))
+            print(get_eval(output),file=f)
         
-        dict2evalbed(output, prefix)
+#         dict2evalbed(output, prefix)
 
     if bed_eval:
         output = evalbed2dict(*args)
@@ -667,27 +657,34 @@ def main(argv):
             print("BED evaluation module failed.")
         else:
             with open(prefix+'.regionaleval.metric.tsv', 'w') as f:
-                f.write(get_eval(output))        
+                f.write(get_eval(output))
 
     if ref_file is not None:
-        hp_info = find_homopolymers(ref_file)
+        hp_info = find_homopolymers(ref_file, prefix+'.hp.bed')
         hp_oc_err,hp_uc_err,hp_len_counter = hp_error_eval(output, hp_info)
-        plt.scatter(hp_uc_err.keys(),
-                    list(hp_uc_err.values()),alpha=.5, c='green',label='UC')
-        plt.scatter(hp_oc_err.keys(),
-                    list(hp_oc_err.values()),alpha=.5, c='darkorange',label='OC')
-        plt.legend()
-        plt.xlabel('Homopolymer Length')
-        plt.ylabel('Error Rate')
-        plt.yscale("log")
-        plt.savefig(prefix+'HP.ErrorRate.png')
-
+        # output a .tsv file instead of a figure so that matplotlib is not needed
+        with open(prefix+'.hp.ErrorRate.tsv', 'w') as f:
+            f.write('\t'.join(['#HP Len','OC rate','UC rate']))
+            for key in hp_len_counter.keys():
+                f.write('\t'.join([str(key), str(hp_oc_err[key]), str(hp_uc_err[key])]))
+                f.write('\n')
+        # plt.scatter(hp_uc_err.keys(),
+        #             list(hp_uc_err.values()),alpha=.5, c='green',label='UC')
+        # plt.scatter(hp_oc_err.keys(),
+        #             list(hp_oc_err.values()),alpha=.5, c='darkorange',label='OC')
+        # plt.legend()
+        # plt.xlabel('Homopolymer Length')
+        # plt.ylabel('Error Rate')
+        # plt.yscale("log")
+        # plt.savefig(prefix+'.hp.ErrorRate.png')
+    
+    
 if __name__ == "__main__":
     import sys
     import getopt
     import re
-    import matplotlib.pyplot as plt
-    from io import StringIO
     from itertools import chain
     from collections import defaultdict
+    
     main(sys.argv)
+    

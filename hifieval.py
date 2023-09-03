@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Version: 0.4.0
+# Update
+
 # Global var that stores the most detailed information of hifieval
 from io import StringIO
 summary = StringIO()
@@ -57,7 +60,7 @@ class ReadError(object):
                     else: break
                 # the position doesn't need to be added since this is an insertion
                 self.inPos.append(num+1)
-#                 self.inPos.append(num+self.start)
+#                 self.inPos.append(num+self.start+1)
                 tmp = re.sub(r'.', '', tmp, count = 1+len(insertion))
             # deletion
             elif tmp[0] == "-":
@@ -69,7 +72,7 @@ class ReadError(object):
                 self.delPos.append(num+1)
                 # take account into the length of deletion into calculating current position
                 num += len(deletion)
-#                 self.delPos.append(num+self.start)
+#                 self.delPos.append(num+self.start+1)
                 tmp = re.sub(r'.', '', tmp, count = 1+len(deletion))
             else:
                 eprint("Unexpected error tag {} in read {}'s cs: {}".format(tmp[0], self.readName, read_cs))
@@ -262,13 +265,12 @@ def error_correction_eval(raw_paf_file, corr_paf_file, full_summary = True):
                         corr_error.chrName, str(corr_error.start), str(corr_error.end), str(corr_error.mq), 
                         str(len(oc)), str(len(uc)), str(len(cc)))
         
-        # append to output if both raw and corrected reads are mapped to the same chromosome
-        if raw_error.chrName == corr_error.chrName:
-            key = corr_error.chrName
-            if key in output:
-                output[key].add_pos(oc, uc, cc)
-            else:
-                output[key] = CorrectionStat(corr_error.chrName).add_pos(oc, uc, cc)
+        # regardless if both raw and corrected reads are mapped to the same chromosome
+        key = corr_error.chrName
+        if key in output:
+            output[key].add_pos(oc, uc, cc)
+        else:
+            output[key] = CorrectionStat(corr_error.chrName).add_pos(oc, uc, cc)
 
     return output
 
@@ -436,6 +438,8 @@ def hp_error_chr_eval(correction_dict, hp_dict):
             else:
                 hp_err[hp_len] += 1
                 i += 1
+                hp_len_counter[hp_len] += 1
+                j += 1
         if len(hp_len_counter.keys()) == 0:
             continue
         hp_len_range = list(hp_len_counter.keys())
@@ -486,6 +490,8 @@ def hp_error_eval(correction_dict, hp_dict):
             else:
                 hp_oc_err[hp_len] += 1
                 i += 1
+                hp_len_counter[hp_len] += 1
+                j += 1
                 
         i = j = 0
         
@@ -498,6 +504,7 @@ def hp_error_eval(correction_dict, hp_dict):
             else:
                 hp_uc_err[hp_len] += 1
                 i += 1
+                j += 1
 
     hp_len_range = list(hp_len_counter.keys())
     max_len = max(hp_len_range)

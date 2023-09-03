@@ -619,6 +619,7 @@ def main(argv):
                                ["prefix=","hp=","specbed","raw=","corrected="])
     
     if len(opts) < 2:
+        print("Version: 0.4.0")
         print("Usage: hifieval.py [options]")
         print("Options:")
         print("  -o STR      Output File Prefix")

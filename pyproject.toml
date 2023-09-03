@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hifieval"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
-  { name="Yujie Guo", email="yujie_guo@hms.harvard.edu" },
+  { name="Yujie Guo", email="yguo@ds.dfci.harvard.edu" },
 ]
 description = "A tool to evaluate long-read error correction mainly with PacBio High-Fidelity Reads"
 readme = "README.md"

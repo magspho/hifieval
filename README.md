@@ -1,8 +1,12 @@
 ## Getting started
-- Install through pip: `pip install hifieval`
+- Install through pip: `pip install hifieval`; add `export PATH=$PATH:path/to/your/site-packages` to `~/.profile` file.
 - Install through conda: `conda install hifieval`
+
+If running from raw reads data using an existing EC tool:
 - Install one error correction/assembly tool: [hifiasm](https://github.com/chhylp123/hifiasm) for example
 - Install [minimap2](https://github.com/lh3/minimap2)
+If just running hifieval.py:
+- Download PAF files from (Zenodo link placeholder)
 ```
 # get test data
 wget https://zenodo.org/record/7799845/files/ecoli.reads.fastq?download=1  # simulated raw reads

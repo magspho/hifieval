@@ -2,13 +2,10 @@
 - Install through pip:
 ```
 pip install --user --force-reinstall hifieval
-# Option 1 to add PATH to .bashrc file (.zshrc for newer Mac OS)
-# add the following line to .bashrc file
-export PATH=path/to/your/site-packages
-# Option 2
-PATH=$PATH:path/to/your/site-packages
-source ~/.bashrc
-# provide location of the package
+# This installs hifieval into $HOME/.local/lib/python{your_version}/site-packages.
+# Then add path/to/your/site-packages to your $PATH and run the tool:
+export PATH=path/to/your/site-packages:$PATH
+# The below command helps you locate the package
 pip show hifieval
 ```
 - Install through conda: `conda install hifieval`

@@ -2,12 +2,12 @@
 - Install through pip:
 ```
 pip install --user --force-reinstall hifieval
-# Option 1 to add PATH to .profile or .bashrc file
-# add the following line to .profile or .bashrc file
+# Option 1 to add PATH to .bashrc file (.zshrc for newer Mac OS)
+# add the following line to .bashrc file
 export PATH=path/to/your/site-packages
 # Option 2
 PATH=$PATH:path/to/your/site-packages
-source ~/.profile
+source ~/.bashrc
 # provide location of the package
 pip show hifieval
 ```

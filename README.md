@@ -1,6 +1,6 @@
 ## Getting started
 - Install through pip:
-```
+```sh
 pip install --user --force-reinstall hifieval
 # This installs hifieval into $HOME/.local/lib/python{your_version}/site-packages.
 # Then add path/to/your/site-packages to your $PATH and run the tool:
@@ -16,7 +16,7 @@ If running from raw reads data using an existing EC tool:
 If just running hifieval.py:
 - You could download PAF files from [Hifieval output data](https://zenodo.org/record/8316047)
 - You could also download raw Hifieval output of EC tools on CHM13 HiFi reads from [Hifieval output data](https://zenodo.org/record/8316047) in order to compare with your own EC tool performance.
-```
+```sh
 # get test data
 wget https://zenodo.org/record/7799845/files/ecoli.reads.fastq?download=1  # simulated raw reads
 wget https://zenodo.org/record/7799845/files/ecoli.ref.fasta?download=1  # reference genome
@@ -34,7 +34,9 @@ hifieval.py -o ecoli.hifiasm -r ecoli.raw.paf -c ecoli.hifiasm.paf
 
 ## Users' Guide
 
-```hifieval [options] -r <raw.paf> -c <corrected.paf>```
+```sh
+hifieval [options] -r <raw.paf> -c <corrected.paf>
+```
 
 Hifieval is a tool to evaluate long-read error correction mainly with PacBio High-Fidelity Reads (HiFi reads). Use command `hifieval` to see available options.
 

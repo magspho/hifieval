@@ -74,3 +74,6 @@ HP regions of different lengths are identified, and UC/OC that fall within these
     - overall metrics for each chromosome and all chromosomes
 7. hp.ErrorRate.tsv
     - contains the error rates for each length of the homopolymers
+
+## Cite our work
+Yujie Guo, Xiaowen Feng, Heng Li, Evaluation of haplotype-aware long-read error correction with hifieval, Bioinformatics, Volume 39, Issue 10, October 2023, btad631, https://doi.org/10.1093/bioinformatics/btad631
